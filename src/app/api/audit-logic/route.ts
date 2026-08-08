@@ -149,15 +149,16 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const symbolicProof = Object.entries(symbolicResult.rawLatex || {}).map(
-      ([target, latex]) => ({
-        targetVariable: target,
-        solutionLatex: latex,
-      })
-    );
+    // Bangun symbolicProof dengan tipe eksplisit string
+    const symbolicProof: { targetVariable: string; solutionLatex: string }[] = [];
+    if (symbolicResult.rawLatex) {
+      for (const [target, latex] of Object.entries(symbolicResult.rawLatex)) {
+        symbolicProof.push({ targetVariable: target, solutionLatex: String(latex) });
+      }
+    }
     if (symbolicProof.length === 0 && symbolicResult.solutions) {
       for (const [target, expr] of Object.entries(symbolicResult.solutions)) {
-        symbolicProof.push({ targetVariable: target, solutionLatex: expr });
+        symbolicProof.push({ targetVariable: target, solutionLatex: String(expr) });
       }
     }
 
