@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 body {
-  @apply bg-gray-50 text-gray-900;
+  @apply bg-gray-50 text-gray-900 dark:bg-gray-950 dark:text-gray-100 transition-colors;
 }
 
 @keyframes fadeIn {
@@ -13,4 +13,15 @@ body {
 
 .animate-fadeIn {
   animation: fadeIn 0.5s ease-out forwards;
+}
+
+/* Untuk menangani transisi warna saat ganti tema */
+* {
+  @apply transition-colors duration-150;
+}
+
+/* Pastikan tidak ada horizontal scroll di mobile */
+html, body {
+  overflow-x: hidden;
+  width: 100%;
 }

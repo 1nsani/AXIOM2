@@ -1,10 +1,13 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import ProblemInput from "@/components/ProblemInput";
 import IdeaSchemaForm from "@/components/IdeaSchemaForm";
 import ViabilityReportView from "@/components/ViabilityReportView";
 import ReportLoadingSkeleton from "@/components/ReportLoadingSkeleton";
+import OnboardingModal from "@/components/OnboardingModal";
+import ThemeToggle from "@/components/ThemeToggle";
 import { loadSymPy } from "@/lib/pyodide";
 import { solveIdea } from "@/lib/symbolicEngine";
 import type { IdeaSchema, FullSubmission, IR, SymbolicResult, IdeaViabilityReport } from "@/lib/types";
@@ -23,33 +26,26 @@ const emptyIdeaSchema: IdeaSchema = {
 type AppState = "IDLE" | "PARSING" | "SOLVING" | "AUDITING" | "DONE" | "ERROR";
 
 export default function Home() {
-  // Form state
   const [problemText, setProblemText] = useState("");
   const [problemImageBase64, setProblemImageBase64] = useState<string | null>(null);
   const [ideaSchema, setIdeaSchema] = useState<IdeaSchema>(emptyIdeaSchema);
 
-  // App state
   const [appState, setAppState] = useState<AppState>("IDLE");
   const [loadingText, setLoadingText] = useState("");
   const [report, setReport] = useState<IdeaViabilityReport | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
 
-  // Preload Pyodide di background
+  // Preload Pyodide
   useEffect(() => {
-    // Panggil loadSymPy tanpa await, biarkan berjalan di background
-    loadSymPy().catch((err) => {
-      console.warn("Pyodide preload gagal, akan dicoba lagi saat submit:", err);
-    });
+    loadSymPy().catch((err) => console.warn("Pyodide preload gagal:", err));
   }, []);
 
-  // Gabungkan fullSubmission
   const getFullSubmission = useCallback((): FullSubmission => ({
     problemText,
     problemImageBase64,
     ideaSchema,
   }), [problemText, problemImageBase64, ideaSchema]);
 
-  // Reset ke IDLE dengan form kosong
   const handleReset = () => {
     setAppState("IDLE");
     setReport(null);
@@ -59,18 +55,15 @@ export default function Home() {
     setIdeaSchema(emptyIdeaSchema);
   };
 
-  // Kembali ke IDLE tanpa reset form (edit)
   const handleEdit = () => {
     setAppState("IDLE");
     setReport(null);
     setErrorMessage("");
   };
 
-  // Kirim Ide handler
   const handleSubmit = async () => {
     const fullSubmission = getFullSubmission();
 
-    // --- Step 1: Parsing via API ---
     setAppState("PARSING");
     setLoadingText("Menerjemahkan ide kamu...");
 
@@ -90,11 +83,14 @@ export default function Home() {
       ir = await parseRes.json();
     } catch (err: any) {
       setAppState("ERROR");
-      setErrorMessage(err.message || "Gagal menghubungi server penerjemah.");
+      setErrorMessage(
+        err.message.includes("422")
+          ? "Sepertinya ada bagian yang kurang jelas. Coba tulis ulang deskripsi sistem dan hukum fisika dengan lebih detail, lalu kirim lagi."
+          : err.message || "Gagal menghubungi server penerjemah. Periksa koneksi internet dan coba lagi."
+      );
       return;
     }
 
-    // --- Step 2: Solving via Pyodide (client-side) ---
     setAppState("SOLVING");
     setLoadingText("Menjalankan kalkulasi simbolik...");
 
@@ -103,11 +99,10 @@ export default function Home() {
       symbolicResult = await solveIdea(ir);
     } catch (err: any) {
       setAppState("ERROR");
-      setErrorMessage("Gagal menjalankan mesin simbolik: " + (err.message || "error tidak diketahui"));
+      setErrorMessage("Gagal menjalankan mesin simbolik. Pastikan browser mendukung WebAssembly. " + (err.message || ""));
       return;
     }
 
-    // Jika tidak COMPATIBLE, langsung selesaikan report tanpa audit
     if (symbolicResult.status !== "COMPATIBLE") {
       const fallbackReport: IdeaViabilityReport = {
         status: symbolicResult.status as IdeaViabilityReport["status"],
@@ -124,7 +119,6 @@ export default function Home() {
       return;
     }
 
-    // --- Step 3: Audit logic via API ---
     setAppState("AUDITING");
     setLoadingText("Mengaudit logika fisika...");
 
@@ -150,67 +144,105 @@ export default function Home() {
       setAppState("DONE");
     } catch (err: any) {
       setAppState("ERROR");
-      setErrorMessage("Audit logika gagal: " + (err.message || "error tidak diketahui"));
+      setErrorMessage("Audit logika gagal. Mungkin server AI sedang sibuk. Coba lagi dalam beberapa saat. " + (err.message || ""));
     }
   };
 
-  // Render berdasarkan state
   return (
-    <main className="min-h-screen bg-gray-50 py-8">
-      {appState === "IDLE" && (
-        <div className="max-w-4xl mx-auto px-4">
-          <ProblemInput
-            problemText={problemText}
-            onChangeText={setProblemText}
-            problemImageBase64={problemImageBase64}
-            onChangeImage={setProblemImageBase64}
-          />
-          <IdeaSchemaForm
-            ideaSchema={ideaSchema}
-            onChangeSchema={setIdeaSchema}
-            onSubmit={handleSubmit}
-          />
-        </div>
-      )}
+    <main className="min-h-screen bg-gray-50 dark:bg-gray-950 py-8">
+      {/* Onboarding hanya muncul pertama kali */}
+      <OnboardingModal />
 
-      {(appState === "PARSING" || appState === "SOLVING" || appState === "AUDITING") && (
-        <div className="max-w-4xl mx-auto px-4">
-          <div className="text-center mb-4">
-            <p className="text-lg font-medium text-indigo-700 animate-pulse">{loadingText}</p>
-          </div>
-          <ReportLoadingSkeleton />
-        </div>
-      )}
+      {/* Theme toggle di pojok kanan atas */}
+      <div className="fixed top-4 right-4 z-40">
+        <ThemeToggle />
+      </div>
 
-      {appState === "DONE" && report && (
-        <ViabilityReportView
-          report={report}
-          onReset={handleReset}
-          onEdit={handleEdit}
-        />
-      )}
-
-      {appState === "ERROR" && (
-        <div className="max-w-4xl mx-auto px-4 text-center">
-          <div className="bg-red-50 border border-red-200 rounded-lg p-6 mb-6">
-            <h2 className="text-xl font-bold text-red-700 mb-2">Oops! Terjadi Kesalahan</h2>
-            <p className="text-red-600">{errorMessage}</p>
-          </div>
-          <button
-            onClick={() => setAppState("IDLE")}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-6 rounded-lg"
+      <AnimatePresence mode="wait">
+        {appState === "IDLE" && (
+          <motion.div
+            key="idle"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.3 }}
+            className="max-w-4xl mx-auto px-4"
           >
-            Coba Lagi
-          </button>
-        </div>
-      )}
+            <ProblemInput
+              problemText={problemText}
+              onChangeText={setProblemText}
+              problemImageBase64={problemImageBase64}
+              onChangeImage={setProblemImageBase64}
+            />
+            <IdeaSchemaForm
+              ideaSchema={ideaSchema}
+              onChangeSchema={setIdeaSchema}
+              onSubmit={handleSubmit}
+            />
+          </motion.div>
+        )}
+
+        {(appState === "PARSING" || appState === "SOLVING" || appState === "AUDITING") && (
+          <motion.div
+            key="loading"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="max-w-4xl mx-auto px-4"
+          >
+            <div className="text-center mb-4">
+              <p className="text-lg font-medium text-indigo-700 dark:text-indigo-400 animate-pulse">{loadingText}</p>
+            </div>
+            <ReportLoadingSkeleton />
+          </motion.div>
+        )}
+
+        {appState === "DONE" && report && (
+          <motion.div
+            key="done"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.4 }}
+          >
+            <ViabilityReportView
+              report={report}
+              onReset={handleReset}
+              onEdit={handleEdit}
+            />
+          </motion.div>
+        )}
+
+        {appState === "ERROR" && (
+          <motion.div
+            key="error"
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3 }}
+            className="max-w-4xl mx-auto px-4 text-center"
+          >
+            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-lg p-6 mb-6">
+              <h2 className="text-xl font-bold text-red-700 dark:text-red-400 mb-2">Oops! Terjadi Kendala</h2>
+              <p className="text-red-600 dark:text-red-400">{errorMessage}</p>
+            </div>
+            <button
+              onClick={() => setAppState("IDLE")}
+              className="bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 text-white font-semibold py-2 px-6 rounded-lg transition min-h-[44px]"
+              aria-label="Coba lagi setelah error"
+            >
+              Coba Lagi
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </main>
   );
 }
 
-// Helper untuk membuat summary otomatis saat solving gagal/tidak cukup
 function generateFallbackSummary(result: SymbolicResult): string {
-  const { status, dofCheck, parseErrors } = result;
+  const { status, dofCheck } = result;
   if (status === "INSUFFICIENT_CONSTRAINTS") {
     return `Jumlah persamaan (${dofCheck.equationCount}) kurang dari target variabel (${dofCheck.targetCount}). Tambahkan persamaan atau kurangi target.`;
   }

@@ -21,7 +21,6 @@ export default function ProblemInput({
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Hanya terima gambar
     if (!file.type.startsWith("image/")) {
       alert("Hanya file gambar yang diperbolehkan.");
       return;
@@ -34,7 +33,6 @@ export default function ProblemInput({
     };
     reader.readAsDataURL(file);
 
-    // Reset input agar bisa memilih file yang sama lagi
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
@@ -45,29 +43,30 @@ export default function ProblemInput({
   };
 
   return (
-    <section className="border-l-4 border-blue-400 bg-white rounded-lg shadow p-4 md:p-6 mb-6">
-      <h2 className="text-xl font-semibold text-blue-700 mb-2">
+    <section className="border-l-4 border-blue-400 dark:border-blue-500 bg-white dark:bg-gray-800 rounded-lg shadow p-4 md:p-6 mb-6">
+      <h2 className="text-xl font-semibold text-blue-700 dark:text-blue-400 mb-2">
         Soal Fisika
       </h2>
-      <p className="text-sm text-gray-500 mb-4">
+      <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
         Masukkan teks soal dan/atau unggah gambar (scan/foto).
       </p>
 
-      {/* Textarea soal */}
       <textarea
+        id="problemText"
         placeholder="Tempel atau ketik soal OSN di sini..."
         value={problemText}
         onChange={(e) => onChangeText(e.target.value)}
         rows={6}
-        className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-400 focus:border-blue-400 outline-none transition resize-y mb-4"
+        className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-400 focus:border-blue-400 outline-none transition resize-y mb-4 min-h-[44px]"
+        aria-label="Teks soal fisika"
       />
 
-      {/* Upload gambar */}
       <div className="flex flex-wrap items-center gap-3">
         <button
           type="button"
           onClick={() => fileInputRef.current?.click()}
-          className="inline-flex items-center gap-2 bg-blue-100 hover:bg-blue-200 text-blue-700 font-medium py-2 px-4 rounded-lg transition text-sm"
+          className="inline-flex items-center gap-2 bg-blue-100 dark:bg-blue-900/30 hover:bg-blue-200 dark:hover:bg-blue-900/50 text-blue-700 dark:text-blue-400 font-medium py-2 px-4 rounded-lg transition text-sm min-h-[44px]"
+          aria-label="Unggah gambar soal"
         >
           <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
             <path fillRule="evenodd" d="M4 5a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2V7a2 2 0 00-2-2h-1.586a1 1 0 01-.707-.293l-1.121-1.121A2 2 0 0011.172 3H8.828a2 2 0 00-1.414.586L6.293 4.707A1 1 0 015.586 5H4zm6 3a3 3 0 11-6 0 3 3 0 016 0zm-2 0a1 1 0 11-2 0 1 1 0 012 0z" clipRule="evenodd" />
@@ -80,26 +79,27 @@ export default function ProblemInput({
           accept="image/*"
           onChange={handleFileChange}
           className="hidden"
+          aria-hidden="true"
         />
 
         {problemImageBase64 && (
           <button
             type="button"
             onClick={handleRemoveImage}
-            className="text-red-500 hover:text-red-700 text-sm font-medium transition"
+            className="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 text-sm font-medium transition min-h-[44px] px-2"
+            aria-label="Hapus gambar yang diunggah"
           >
             Hapus gambar
           </button>
         )}
       </div>
 
-      {/* Preview gambar */}
       {problemImageBase64 && (
         <div className="mt-4">
           <img
             src={problemImageBase64}
-            alt="Preview soal"
-            className="max-w-full max-h-64 rounded-md border border-gray-200 object-contain"
+            alt="Preview soal yang diunggah"
+            className="max-w-full max-h-64 rounded-md border border-gray-200 dark:border-gray-600 object-contain"
           />
         </div>
       )}
