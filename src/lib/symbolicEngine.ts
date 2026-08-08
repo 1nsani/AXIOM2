@@ -1,5 +1,5 @@
 import { loadSymPy, runPython } from "@/lib/pyodide";
-import { IR, SymbolicResult } from "@/lib/types";
+import { IR, SymbolicResult, MonteCarloResult } from "@/lib/types";
 
 export async function solveIdea(ir: IR): Promise<SymbolicResult> {
   // Pastikan Pyodide + SymPy sudah termuat
@@ -117,7 +117,7 @@ else:
     # target_symbols kosong? tidak mungkin, tapi jaga-jaga
     status = "INSUFFICIENT_CONSTRAINTS"
 
-# Jika status sudah bukan COMPATIBLE, kosongkan solutions
+# Jika status bukan COMPATIBLE, kosongkan solutions
 if status != "COMPATIBLE":
     solutions = {}
     raw_latex = {}
@@ -142,5 +142,113 @@ print(json.dumps(result))
   const output = await runPython(pythonCode);
   // Parse hasil JSON dari Python
   const result: SymbolicResult = JSON.parse(output);
+  return result;
+}
+
+// Fungsi baru: Monte Carlo verification (Fase 5)
+export async function monteCarloVerify(
+  userExpr: string,
+  answerKeyExpr: string,
+  freeSymbols: string[],
+  iterations: number = 100
+): Promise<MonteCarloResult> {
+  await loadSymPy();
+
+  const pythonCode = `
+import json
+import sympy
+import random
+import math
+
+user_expr_str = """${userExpr}"""
+answer_expr_str = """${answerKeyExpr}"""
+free_symbols = ${JSON.stringify(freeSymbols)}
+iterations = ${iterations}
+
+# Buat simbol
+sym_dict = {}
+for s in free_symbols:
+    sym_dict[s] = sympy.symbols(s)
+
+# Parse ekspresi
+try:
+    user_expr = sympy.sympify(user_expr_str, locals=sym_dict)
+except Exception as e:
+    print(json.dumps({"error": f"Gagal parse userExpr: {str(e)}"}))
+    raise SystemExit(0)
+
+try:
+    answer_expr = sympy.sympify(answer_expr_str, locals=sym_dict)
+except Exception as e:
+    print(json.dumps({"error": f"Gagal parse answerKeyExpr: {str(e)}"}))
+    raise SystemExit(0)
+
+# 1. Cek simbolik dulu
+try:
+    diff = sympy.simplify(user_expr - answer_expr)
+    if diff == 0:
+        result = {
+            "status": "MATCH_SYMBOLIC",
+            "validIterations": 0,
+            "matchingIterations": 0,
+            "sampleMismatch": None
+        }
+        print(json.dumps(result))
+        raise SystemExit(0)
+except:
+    # simplify gagal, lanjut ke Monte Carlo
+    pass
+
+# 2. Monte Carlo
+valid = 0
+match = 0
+sample_mismatch = None
+
+for i in range(iterations):
+    # Generate random substitution
+    subs_dict = {}
+    try:
+        for s in free_symbols:
+            # Rentang aman 0.1 sampai 10, hindari 0
+            subs_dict[sym_dict[s]] = random.uniform(0.1, 10.0)
+        # Evaluasi numerik
+        user_val = float(user_expr.subs(subs_dict).evalf())
+        answer_val = float(answer_expr.subs(subs_dict).evalf())
+        # Cek domain: mungkin NaN atau inf
+        if math.isnan(user_val) or math.isnan(answer_val) or math.isinf(user_val) or math.isinf(answer_val):
+            continue
+        valid += 1
+        if abs(user_val - answer_val) < 1e-6:
+            match += 1
+        elif sample_mismatch is None:
+            # Simpan contoh mismatch pertama
+            sample_mismatch = {
+                "substitution": {s: subs_dict[sym_dict[s]] for s in free_symbols},
+                "userValue": user_val,
+                "answerValue": answer_val
+            }
+    except:
+        # Domain error, skip iterasi ini
+        continue
+
+# Tentukan status
+if valid < 10:
+    status = "INCONCLUSIVE"
+elif match / valid >= 0.9:
+    status = "MATCH_NUMERIC"
+else:
+    status = "MISMATCH"
+
+result = {
+    "status": status,
+    "validIterations": valid,
+    "matchingIterations": match,
+    "sampleMismatch": sample_mismatch
+}
+print(json.dumps(result))
+`;
+
+  const output = await runPython(pythonCode);
+  const result: MonteCarloResult = JSON.parse(output);
   return result;
 }

@@ -48,4 +48,36 @@ export interface SymbolicResult {
   solutions: Record<string, string>;        // target variable -> ekspresi solusi (string)
   parseErrors: string[];                    // persamaan yang gagal di-parse
   rawLatex: Record<string, string>;         // solusi dalam LaTeX
+  monteCarlo?: MonteCarloResult;            // opsional, hasil verifikasi Monte Carlo (Fase 5)
+}
+
+// Tipe hasil Monte Carlo verification (Fase 5)
+export interface MonteCarloResult {
+  status: "MATCH_SYMBOLIC" | "MATCH_NUMERIC" | "MISMATCH" | "INCONCLUSIVE";
+  validIterations: number;
+  matchingIterations: number;
+  sampleMismatch: {
+    substitution: Record<string, number>;
+    userValue: number;
+    answerValue: number;
+  } | null;
+}
+
+// Tipe Intermediate Representation (dari Fase 3, disimpan di sini untuk kelengkapan)
+export interface IR {
+  variables: string[];
+  equations: {
+    id: string;
+    sourceLabel: string;
+    sympyExpr: string;
+    description: string;
+  }[];
+  constraints: {
+    id: string;
+    sympyExpr: string;
+    description: string;
+  }[];
+  targetVariables: string[];
+  declaredEquationCount: number;
+  parsingNotes: string[];
 }
