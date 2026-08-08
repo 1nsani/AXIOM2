@@ -18,7 +18,7 @@ export interface Blok2Item {
     | '';
 }
 
-// Tipe data keseluruhan form
+// Tipe data keseluruhan idea schema (blok 1-4)
 export interface IdeaSchema {
   blok1: Blok1Item[];
   blok2: Blok2Item[];
@@ -28,4 +28,11 @@ export interface IdeaSchema {
     totalPersamaan: number;
     batasKondisi: string;
   };
+}
+
+// Tipe data gabungan untuk kiriman lengkap (Fase 2)
+export interface FullSubmission {
+  problemText: string;
+  problemImageBase64: string | null;
+  ideaSchema: IdeaSchema;
 }

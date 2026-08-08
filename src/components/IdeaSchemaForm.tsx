@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { IdeaSchema, Blok1Item, Blok2Item } from "@/lib/types";
 
 function generateId(): string {
@@ -19,80 +18,79 @@ const emptyBlok2Item = (): Blok2Item => ({
   kategori: "",
 });
 
-export default function IdeaSchemaForm() {
-  const [ideaSchema, setIdeaSchema] = useState<IdeaSchema>({
-    blok1: [emptyBlok1Item()],
-    blok2: [emptyBlok2Item()],
-    blok3: "",
-    blok4: {
-      targetVariabel: "",
-      totalPersamaan: 0,
-      batasKondisi: "",
-    },
-  });
+interface IdeaSchemaFormProps {
+  ideaSchema: IdeaSchema;
+  onChangeSchema: (newSchema: IdeaSchema) => void;
+  onSubmit?: () => void;
+}
 
+export default function IdeaSchemaForm({
+  ideaSchema,
+  onChangeSchema,
+  onSubmit,
+}: IdeaSchemaFormProps) {
   // --- Blok 1 handlers ---
   const addBlok1 = () => {
-    setIdeaSchema((prev) => ({
-      ...prev,
-      blok1: [...prev.blok1, emptyBlok1Item()],
-    }));
+    onChangeSchema({
+      ...ideaSchema,
+      blok1: [...ideaSchema.blok1, emptyBlok1Item()],
+    });
   };
 
   const removeBlok1 = (id: string) => {
-    setIdeaSchema((prev) => ({
-      ...prev,
-      blok1: prev.blok1.filter((item) => item.id !== id),
-    }));
+    onChangeSchema({
+      ...ideaSchema,
+      blok1: ideaSchema.blok1.filter((item) => item.id !== id),
+    });
   };
 
   const updateBlok1Item = (id: string, field: keyof Blok1Item, value: string) => {
-    setIdeaSchema((prev) => ({
-      ...prev,
-      blok1: prev.blok1.map((item) =>
+    onChangeSchema({
+      ...ideaSchema,
+      blok1: ideaSchema.blok1.map((item) =>
         item.id === id ? { ...item, [field]: value } : item
       ),
-    }));
+    });
   };
 
   // --- Blok 2 handlers ---
   const addBlok2 = () => {
-    setIdeaSchema((prev) => ({
-      ...prev,
-      blok2: [...prev.blok2, emptyBlok2Item()],
-    }));
+    onChangeSchema({
+      ...ideaSchema,
+      blok2: [...ideaSchema.blok2, emptyBlok2Item()],
+    });
   };
 
   const removeBlok2 = (id: string) => {
-    setIdeaSchema((prev) => ({
-      ...prev,
-      blok2: prev.blok2.filter((item) => item.id !== id),
-    }));
+    onChangeSchema({
+      ...ideaSchema,
+      blok2: ideaSchema.blok2.filter((item) => item.id !== id),
+    });
   };
 
   const updateBlok2Item = (id: string, field: keyof Blok2Item, value: string) => {
-    setIdeaSchema((prev) => ({
-      ...prev,
-      blok2: prev.blok2.map((item) =>
+    onChangeSchema({
+      ...ideaSchema,
+      blok2: ideaSchema.blok2.map((item) =>
         item.id === id ? { ...item, [field]: value } : item
       ),
-    }));
+    });
   };
 
   // --- Blok 3 handler ---
   const updateBlok3 = (value: string) => {
-    setIdeaSchema((prev) => ({
-      ...prev,
+    onChangeSchema({
+      ...ideaSchema,
       blok3: value,
-    }));
+    });
   };
 
   // --- Blok 4 handlers ---
   const updateBlok4 = (field: "targetVariabel" | "totalPersamaan" | "batasKondisi", value: string | number) => {
-    setIdeaSchema((prev) => ({
-      ...prev,
-      blok4: { ...prev.blok4, [field]: value },
-    }));
+    onChangeSchema({
+      ...ideaSchema,
+      blok4: { ...ideaSchema.blok4, [field]: value },
+    });
   };
 
   // Hitung indikator keseimbangan Blok 4
@@ -104,9 +102,8 @@ export default function IdeaSchemaForm() {
   const isSeimbang = targetCount === persamaanCount;
   const showIndicator = targetCount > 0 || persamaanCount > 0;
 
-  // Submit handler (hanya console.log)
   const handleSubmit = () => {
-    console.log(JSON.stringify(ideaSchema, null, 2));
+    onSubmit?.();
   };
 
   return (
