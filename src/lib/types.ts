@@ -45,10 +45,10 @@ export interface SymbolicResult {
     equationCount: number;
     balanced: boolean;
   };
-  solutions: Record<string, string>;        // target variable -> ekspresi solusi (string)
-  parseErrors: string[];                    // persamaan yang gagal di-parse
-  rawLatex: Record<string, string>;         // solusi dalam LaTeX
-  monteCarlo?: MonteCarloResult;            // opsional, hasil verifikasi Monte Carlo (Fase 5)
+  solutions: Record<string, string>;
+  parseErrors: string[];
+  rawLatex: Record<string, string>;
+  monteCarlo?: MonteCarloResult;
 }
 
 // Tipe hasil Monte Carlo verification (Fase 5)
@@ -63,7 +63,7 @@ export interface MonteCarloResult {
   } | null;
 }
 
-// Tipe Intermediate Representation (dari Fase 3, disimpan di sini untuk kelengkapan)
+// Tipe Intermediate Representation (dari Fase 3)
 export interface IR {
   variables: string[];
   equations: {
@@ -80,4 +80,23 @@ export interface IR {
   targetVariables: string[];
   declaredEquationCount: number;
   parsingNotes: string[];
+}
+
+// Tipe untuk audit per block (dari Fase 6)
+export interface BlockAudit {
+  block: "SISTEM_ACUAN" | "HUKUM_FISIKA" | "CONSTRAINTS" | "BATAS_DOF";
+  verdict: "OK" | "ERROR";
+  explanation: string;
+}
+
+// Tipe laporan akhir (Fase 6)
+export interface IdeaViabilityReport {
+  status: "COMPATIBLE" | "INSUFFICIENT_CONSTRAINTS" | "LOGIC_ERROR" | "SOLVE_FAILED" | "OVERDETERMINED";
+  blockAudits: BlockAudit[];
+  symbolicProof: {
+    targetVariable: string;
+    solutionLatex: string;
+  }[];
+  summary: string;
+  generatedAt: string;
 }
