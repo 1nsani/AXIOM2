@@ -36,3 +36,16 @@ export interface FullSubmission {
   problemImageBase64: string | null;
   ideaSchema: IdeaSchema;
 }
+
+// Tipe hasil dari Symbolic Engine (Fase 4)
+export interface SymbolicResult {
+  status: "COMPATIBLE" | "INSUFFICIENT_CONSTRAINTS" | "OVERDETERMINED" | "SOLVE_FAILED";
+  dofCheck: {
+    targetCount: number;
+    equationCount: number;
+    balanced: boolean;
+  };
+  solutions: Record<string, string>;        // target variable -> ekspresi solusi (string)
+  parseErrors: string[];                    // persamaan yang gagal di-parse
+  rawLatex: Record<string, string>;         // solusi dalam LaTeX
+}
