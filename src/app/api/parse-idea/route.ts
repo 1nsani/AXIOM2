@@ -3,8 +3,8 @@ import { IRSchema } from "@/lib/schemas";
 
 export const maxDuration = 60;
 
-const DEEPSEEK_API_URL = "https://api.deepseek.com/chat/completions";
-const MODEL = "deepseek-chat";
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
 
 const SYSTEM_PROMPT = `Anda adalah penerjemah fisika untuk sistem komputasi simbolik (SymPy).
 Tugas Anda: membaca skema ide dari pengguna (dalam bahasa Indonesia atau campuran istilah fisika) dan mengubahnya menjadi representasi perantara (IR) yang berisi ekspresi simbolik SymPy.
@@ -30,10 +30,9 @@ Aturan:
 10. Kembalikan HANYA JSON VALID, tanpa teks lain, tanpa markdown code fence (jangan pakai \`\`\`json ... \`\`\`). Hanya string JSON murni.`;
 
 export async function POST(request: NextRequest) {
-  const apiKey = process.env.DEEPSEEK_API_KEY;
-  if (!apiKey) {
+  if (!GEMINI_API_KEY) {
     return NextResponse.json(
-      { error: "Server configuration error: DEEPSEEK_API_KEY not set" },
+      { error: "Server configuration error: GEMINI_API_KEY not set" },
       { status: 500 }
     );
   }
@@ -55,41 +54,48 @@ export async function POST(request: NextRequest) {
 
   const userMessage = JSON.stringify({ ideaSchema }, null, 2);
 
+  // Gemini request
+  const geminiRequest = {
+    system_instruction: {
+      parts: [{ text: SYSTEM_PROMPT }]
+    },
+    contents: [
+      {
+        parts: [{ text: userMessage }]
+      }
+    ],
+    generationConfig: {
+      temperature: 0.2,
+      maxOutputTokens: 2048,
+    },
+  };
+
   try {
-    const deepseekRes = await fetch(DEEPSEEK_API_URL, {
+    const geminiRes = await fetch(`${GEMINI_URL}?key=${GEMINI_API_KEY}`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: MODEL,
-        messages: [
-          { role: "system", content: SYSTEM_PROMPT },
-          { role: "user", content: userMessage },
-        ],
-        temperature: 0.2,
-      }),
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(geminiRequest),
     });
 
-    if (!deepseekRes.ok) {
-      const errText = await deepseekRes.text();
+    if (!geminiRes.ok) {
+      const errText = await geminiRes.text();
       return NextResponse.json(
-        { error: `DeepSeek API error: ${deepseekRes.status} ${errText}` },
+        { error: `Gemini API error: ${geminiRes.status} ${errText}` },
         { status: 502 }
       );
     }
 
-    const data = await deepseekRes.json();
-    const rawContent = data.choices?.[0]?.message?.content;
+    const geminiData = await geminiRes.json();
+    const rawContent = geminiData.candidates?.[0]?.content?.parts?.[0]?.text;
 
     if (!rawContent) {
       return NextResponse.json(
-        { error: "DeepSeek returned empty response" },
+        { error: "Gemini returned empty response", raw: JSON.stringify(geminiData) },
         { status: 502 }
       );
     }
 
+    // Parse JSON (tetap ada kemungkinan markdown fence)
     let parsed: any;
     try {
       parsed = JSON.parse(rawContent);
@@ -102,10 +108,7 @@ export async function POST(request: NextRequest) {
         parsed = JSON.parse(cleaned);
       } catch {
         return NextResponse.json(
-          {
-            error: "Failed to parse LLM response as JSON",
-            raw: rawContent.slice(0, 500),
-          },
+          { error: "Failed to parse LLM response as JSON", raw: rawContent.slice(0, 500) },
           { status: 422 }
         );
       }
@@ -114,11 +117,7 @@ export async function POST(request: NextRequest) {
     const validation = IRSchema.safeParse(parsed);
     if (!validation.success) {
       return NextResponse.json(
-        {
-          error: "LLM output tidak sesuai schema IR",
-          details: validation.error.issues,
-          received: parsed,
-        },
+        { error: "LLM output tidak sesuai schema IR", details: validation.error.issues, received: parsed },
         { status: 422 }
       );
     }

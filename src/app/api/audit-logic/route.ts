@@ -4,8 +4,8 @@ import type { IR, SymbolicResult, IdeaSchema, IdeaViabilityReport } from "@/lib/
 
 export const maxDuration = 60;
 
-const DEEPSEEK_API_URL = "https://api.deepseek.com/chat/completions";
-const MODEL = "deepseek-chat";
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
 
 const SYSTEM_PROMPT = `Anda adalah Auditor Fisika untuk Olimpiade Sains Nasional (OSN), sangat teliti dalam menemukan kesalahan konsep fisika pada solusi siswa. Tugas Anda: membaca ideaSchema (deskripsi sistem, hukum fisika yang dipakai, constraints, target variabel) dan hasil symbolic check (apakah persamaan cukup dan bisa diselesaikan). Anda TIDAK menghitung ulang aljabar, hanya menilai kebenaran konsep.
 
@@ -36,10 +36,9 @@ Kembalikan HANYA JSON valid tanpa teks lain, tanpa markdown fence. Format:
 }`;
 
 export async function POST(request: NextRequest) {
-  const apiKey = process.env.DEEPSEEK_API_KEY;
-  if (!apiKey) {
+  if (!GEMINI_API_KEY) {
     return NextResponse.json(
-      { error: "Server configuration error: DEEPSEEK_API_KEY not set" },
+      { error: "Server configuration error: GEMINI_API_KEY not set" },
       { status: 500 }
     );
   }
@@ -72,37 +71,42 @@ export async function POST(request: NextRequest) {
 
   const userMessage = JSON.stringify(userContext, null, 2);
 
+  const geminiRequest = {
+    system_instruction: {
+      parts: [{ text: SYSTEM_PROMPT }]
+    },
+    contents: [
+      {
+        parts: [{ text: userMessage }]
+      }
+    ],
+    generationConfig: {
+      temperature: 0.2,
+      maxOutputTokens: 2048,
+    },
+  };
+
   try {
-    const deepseekRes = await fetch(DEEPSEEK_API_URL, {
+    const geminiRes = await fetch(`${GEMINI_URL}?key=${GEMINI_API_KEY}`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: MODEL,
-        messages: [
-          { role: "system", content: SYSTEM_PROMPT },
-          { role: "user", content: userMessage },
-        ],
-        temperature: 0.2,
-      }),
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(geminiRequest),
     });
 
-    if (!deepseekRes.ok) {
-      const errText = await deepseekRes.text();
+    if (!geminiRes.ok) {
+      const errText = await geminiRes.text();
       return NextResponse.json(
-        { error: `DeepSeek API error: ${deepseekRes.status} ${errText}` },
+        { error: `Gemini API error: ${geminiRes.status} ${errText}` },
         { status: 502 }
       );
     }
 
-    const data = await deepseekRes.json();
-    const rawContent = data.choices?.[0]?.message?.content;
+    const geminiData = await geminiRes.json();
+    const rawContent = geminiData.candidates?.[0]?.content?.parts?.[0]?.text;
 
     if (!rawContent) {
       return NextResponse.json(
-        { error: "DeepSeek returned empty response" },
+        { error: "Gemini returned empty response", raw: JSON.stringify(geminiData) },
         { status: 502 }
       );
     }
@@ -119,10 +123,7 @@ export async function POST(request: NextRequest) {
         auditParsed = JSON.parse(cleaned);
       } catch {
         return NextResponse.json(
-          {
-            error: "Failed to parse LLM audit response as JSON",
-            raw: rawContent.slice(0, 500),
-          },
+          { error: "Failed to parse LLM audit response as JSON", raw: rawContent.slice(0, 500) },
           { status: 422 }
         );
       }
@@ -131,11 +132,7 @@ export async function POST(request: NextRequest) {
     const auditValidation = AuditResponseSchema.safeParse(auditParsed);
     if (!auditValidation.success) {
       return NextResponse.json(
-        {
-          error: "LLM audit output tidak sesuai schema",
-          details: auditValidation.error.issues,
-          received: auditParsed,
-        },
+        { error: "LLM audit output tidak sesuai schema", details: auditValidation.error.issues, received: auditParsed },
         { status: 422 }
       );
     }
