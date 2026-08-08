@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { IRSchema } from "@/lib/schemas";
 
+export const maxDuration = 60;
+
 const DEEPSEEK_API_URL = "https://api.deepseek.com/chat/completions";
 const MODEL = "deepseek-chat";
 
-// System prompt lengkap untuk DeepSeek
 const SYSTEM_PROMPT = `Anda adalah penerjemah fisika untuk sistem komputasi simbolik (SymPy).
 Tugas Anda: membaca skema ide dari pengguna (dalam bahasa Indonesia atau campuran istilah fisika) dan mengubahnya menjadi representasi perantara (IR) yang berisi ekspresi simbolik SymPy.
 
@@ -52,7 +53,6 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Bangun pesan user: kirimkan ideaSchema sebagai JSON string agar LLM membaca
   const userMessage = JSON.stringify({ ideaSchema }, null, 2);
 
   try {
@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
           { role: "system", content: SYSTEM_PROMPT },
           { role: "user", content: userMessage },
         ],
-        temperature: 0.2, // rendah agar output deterministik
+        temperature: 0.2,
       }),
     });
 
@@ -90,12 +90,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Coba parse JSON dari respons
     let parsed: any;
     try {
       parsed = JSON.parse(rawContent);
     } catch {
-      // Coba bersihkan markdown fence jika ada
       const cleaned = rawContent
         .replace(/^```json\s*/i, "")
         .replace(/```$/, "")
@@ -113,7 +111,6 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Validasi dengan Zod
     const validation = IRSchema.safeParse(parsed);
     if (!validation.success) {
       return NextResponse.json(

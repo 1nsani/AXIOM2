@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { AuditResponseSchema, IdeaViabilityReportSchema } from "@/lib/schemas";
 import type { IR, SymbolicResult, IdeaSchema, IdeaViabilityReport } from "@/lib/types";
 
+export const maxDuration = 60;
+
 const DEEPSEEK_API_URL = "https://api.deepseek.com/chat/completions";
 const MODEL = "deepseek-chat";
 
-// System prompt Auditor Fisika (lengkap, eksplisit)
 const SYSTEM_PROMPT = `Anda adalah Auditor Fisika untuk Olimpiade Sains Nasional (OSN), sangat teliti dalam menemukan kesalahan konsep fisika pada solusi siswa. Tugas Anda: membaca ideaSchema (deskripsi sistem, hukum fisika yang dipakai, constraints, target variabel) dan hasil symbolic check (apakah persamaan cukup dan bisa diselesaikan). Anda TIDAK menghitung ulang aljabar, hanya menilai kebenaran konsep.
 
 Untuk setiap BLOK berikut, berikan audit:
@@ -58,7 +59,6 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Bangun konteks untuk LLM: ideaSchema (deskripsi user) + ringkasan symbolic
   const userContext = {
     problemText: problemText || "(tidak ada teks soal)",
     ideaSchema: ideaSchema,
@@ -107,7 +107,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Parse & bersihkan JSON
     let auditParsed: any;
     try {
       auditParsed = JSON.parse(rawContent);
@@ -129,7 +128,6 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Validasi dengan Zod
     const auditValidation = AuditResponseSchema.safeParse(auditParsed);
     if (!auditValidation.success) {
       return NextResponse.json(
@@ -144,30 +142,22 @@ export async function POST(request: NextRequest) {
 
     const audit = auditValidation.data;
 
-    // Gabungkan dengan symbolicResult untuk menentukan status akhir laporan
     let finalStatus: IdeaViabilityReport["status"] = "COMPATIBLE";
-
     if (symbolicResult.status !== "COMPATIBLE") {
-      // Masalah matematis/DoF lebih prioritas
-      finalStatus = symbolicResult.status as any; // bisa INSUFFICIENT_CONSTRAINTS, OVERDETERMINED, SOLVE_FAILED
+      finalStatus = symbolicResult.status as any;
     } else {
-      // Symbolic OK, cek audit LLM
       const hasError = audit.blockAudits.some((b) => b.verdict === "ERROR");
       if (hasError) {
         finalStatus = "LOGIC_ERROR";
-      } else {
-        finalStatus = "COMPATIBLE";
       }
     }
 
-    // Bangun symbolicProof dari symbolicResult.solutions
     const symbolicProof = Object.entries(symbolicResult.rawLatex || {}).map(
       ([target, latex]) => ({
         targetVariable: target,
         solutionLatex: latex,
       })
     );
-    // Jika tidak ada rawLatex (misal solve gagal), gunakan solutions biasa
     if (symbolicProof.length === 0 && symbolicResult.solutions) {
       for (const [target, expr] of Object.entries(symbolicResult.solutions)) {
         symbolicProof.push({ targetVariable: target, solutionLatex: expr });
@@ -182,7 +172,6 @@ export async function POST(request: NextRequest) {
       generatedAt: new Date().toISOString(),
     };
 
-    // Validasi laporan akhir (opsional, untuk jaga konsistensi)
     const reportValidation = IdeaViabilityReportSchema.safeParse(report);
     if (!reportValidation.success) {
       return NextResponse.json(
